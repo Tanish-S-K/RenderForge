@@ -1,0 +1,16 @@
+
+23/04/2026,24/04/2026
+	
+	-- made basic server to upload file to supabase and exposes api nodes using flask
+	-- made the worker agent to get job from supabase (jobs are represent in table)
+	-- the worker agent will render using blender cli and upload the output file
+	-- basic html frontend to get file from user and send post request to server api
+
+=== the basic demo version is ready
+=== this version is not good enough to continue development 
+
+-- discontinued the basic version --- 
+
+29/04/2026
+
+	-- made a proper system design, database schema, designed work flow( diaram available in ./artifacts)
