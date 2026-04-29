@@ -14,3 +14,4 @@
 29/04/2026
 
 	-- made a proper system design, database schema, designed work flow( diaram available in ./artifacts)
+	-- writing the worker agent work flow, and partial coding
