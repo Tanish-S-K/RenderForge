@@ -1,0 +1,4 @@
+httpx
+supabase
+redis
+dotenv
