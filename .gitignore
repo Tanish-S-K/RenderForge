@@ -1,3 +1,4 @@
 ./.env
 .env
 agent/blender/
+./agent/blender/
