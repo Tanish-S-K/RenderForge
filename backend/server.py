@@ -20,6 +20,9 @@
 """
 
 import json
+from urllib import response
+
+import httpx
 
 from fastapi import FastAPI, UploadFile, File, Form
 import supabase
@@ -79,7 +82,7 @@ def split_job(job_id, start_frame, end_frame, format):
         put_ready_queue(job_id, subtask["subtask_id"])
         sp.rpc("increment_job_counts", {"jid": job_id}).execute()
         sp.table("subtask").insert(subtask).execute()
-
+    sp.table("job").update({"status":"processing"}).eq("job_id",job_id).execute()
     return {"message": "Job split successfully"}
 
 @app.post("/register/job/")
@@ -116,11 +119,19 @@ def machine_failed(job_id):
 
 @app.post("/job_complete/{job_id}")
 def job_complete(job_id):
-    # call the merger with api route /merge/{job_id}
-    # set job status to merging
     cnt = sp.table("job").select("alive_cnt").eq("job_id", job_id).execute().data[0]["alive_cnt"]
+
     if (cnt == 0):
-        print("job complete")
+        response = httpx.post(f"http://localhost:8001/merge/{job_id}",timeout=None)
+        output_file = response.json()["output_file"]
+        content = open(output_file,"rb").read()
+
+        name = sp.table("job").select("name").eq("job_id",job_id).execute().data[0]["name"]
+        user_id = sp.table("job").select("user_id").eq("job_id",job_id).execute().data[0]["user_id"]
+
+        sp.storage.from_("RFV2").upload(f"users/{user_id}/output/{name}.mp4",content)
+        sp.table("job").update({"status":"done"}).eq("job_id",job_id).execute()
+        return {"message": "Merged successfully"}
     else:
         return {"message": "Invalid request, job not complete yet"}
 

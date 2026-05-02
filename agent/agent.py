@@ -119,7 +119,8 @@ def send_to_storage(job, user_id):
     # get storge url using the object_id;
     # upload the file with name id+subtask_id to the storage;
 
-    sp.storage.from_("RFV2").upload(f"users/{user_id}/output/{os.path.basename(job)}", open(job, "rb").read())
+    sp.storage.from_("RFV2").upload(f"users/{user_id}/subtasks/{os.path.basename(job)}", open(job, "rb").read())
+    os.remove(job)
     return {"message": "File uploaded successfully"}
 
 def send_machine_failed(job):
@@ -136,7 +137,7 @@ def report_job_done(job):
     sp.rpc("decrement_alive_cnt", {"jid": job.job_id}).execute()
 
     if (sp.table("job").select("alive_cnt").eq("job_id", job.job_id).execute().data[0]["alive_cnt"] == 0):
-        return httpx.post(f"http://localhost:8000/job_complete/{job.job_id}")
+        return httpx.post(f"http://localhost:8000/job_complete/{job.job_id}",timeout=None)
     return {"message": "Job reported as done"}
 
 def main():
