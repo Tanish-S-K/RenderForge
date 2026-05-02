@@ -1,5 +1,3 @@
-./.env
 .env
 agent/blender/
-./agent/blender/
-./backend/dependencies/
+backend/dependencies/
