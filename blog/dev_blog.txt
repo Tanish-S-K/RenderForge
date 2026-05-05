@@ -43,3 +43,9 @@ remaining task as of 5/5/2026
 		--- registering user and give userid, same for machines
 		--- handle the heartbeat of machines
 		--- provide the output file to user
+
+3/5/36 - 5/5/26
+
+	--- uniquely identify each machine and give agent (machine registeration)
+	--- wrote the user registeration and login
+	--- implement agents to send heart beat every 15 sec and monitor it;

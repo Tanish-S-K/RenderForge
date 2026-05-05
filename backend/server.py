@@ -20,8 +20,7 @@
 """
 
 import json
-from urllib import response
-
+from datetime import datetime, timezone
 import httpx
 
 from fastapi import FastAPI, UploadFile, File, Form
@@ -134,5 +133,10 @@ def job_complete(job_id):
         return {"message": "Merged successfully"}
     else:
         return {"message": "Invalid request, job not complete yet"}
+
+@app.get("/heartbeat/{machine_id}")
+def record_heartbeat(machine_id: str):
+    sp.table("device").update({"last_seen": datetime.now(timezone.utc).isoformat()}).eq("machine_id",machine_id).execute()
+    return {"message":"Recorded"}
 
 # redis setup: https://share.google/aimode/nszQ2NXoCmcwM5jTk

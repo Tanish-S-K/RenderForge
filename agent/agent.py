@@ -1,11 +1,13 @@
 """
     core logic : gets job from queue, renders it, and sends it to storage
-    other stuff : sends a heartbeat to the server every 10 seconds to let it know it's alive
+    other stuff : sends a heartbeat to the server every 10 seconds to let it know it's alive,
+                  gives the server a unique fingerprint of the device
 
 """
 
 import redis,supabase,subprocess
 import os,time,json,dotenv,httpx
+import platform,uuid,hashlib,threading
 
 dotenv.load_dotenv()
 
@@ -15,7 +17,7 @@ REDIS_ENDPOINT = os.getenv("redis_endpoint")
 REDIS_PASSWORD = os.getenv("redis_password")
 BLENDER_PATH = os.getenv("BLENDER_PATH")
 
-mid = os.getenv("machine_id")
+mid = None
 
 REDIS_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_ENDPOINT}"
 
@@ -71,9 +73,15 @@ def get_job():
 def send_heartbeat():
 
     # api route: /heartbeat/{machine_id}
-    # post request to api route;
+    # post request to api route every 15 sec;
 
-    pass
+    while True:
+        try:
+            httpx.get(f"http://localhost:8001/heartbeat/{mid}")
+        except:
+            print("device failed restarting")
+        time.sleep(15)
+    
 
 def render_job(loc, start_frame, length, subtask_id):
     end_frame = start_frame + length - 1
@@ -140,8 +148,31 @@ def report_job_done(job):
         return httpx.post(f"http://localhost:8000/job_complete/{job.job_id}",timeout=None)
     return {"message": "Job reported as done"}
 
+
+
+def get_device_fingerprint():
+    try:
+        mac = uuid.getnode()
+    except:
+        mac = "unknown"
+
+    data = [
+        platform.system(),
+        platform.node(),
+        platform.machine(),
+        str(mac)
+    ]
+
+    raw = "|".join(data)
+    fingerprint = hashlib.sha256(raw.encode()).hexdigest()
+
+    return str(fingerprint)
+
 def main():
-    
+    global mid
+    mid = httpx.post(f"http://localhost:8000/register/machine/",json={"finger_print":get_device_fingerprint(),"user_id":"b83ad1b7-72b1-4baa-9dfb-a84d1b876c19"}).json()["machine_id"]
+    threading.Thread(target=send_heartbeat, daemon=True).start()
+
     while True:
         # check for the job
         # available
@@ -154,7 +185,6 @@ def main():
 
         if not job:
             time.sleep(5)
-            send_heartbeat()
             continue
         url,job = job
 
