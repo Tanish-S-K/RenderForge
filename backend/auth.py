@@ -63,7 +63,7 @@ async def register_user(data: LoginRequest):
         return {"message": "Someproblem occured"}
     user_id = res.user.id
 
-    sp.table("user").insert({"id":user_id}).execute()
+    sp.table("user").insert({"user_id":user_id}).execute()
     return {
         "token": res.session.access_token,
         "user_id": user_id
@@ -82,6 +82,7 @@ async def machine_register(data: Machine_Request):
         ).execute()
 
         machine_id = res.data
+        sp.table("device").update({"status":"free"}).eq("machine_id",machine_id).execute()
         return {"machine_id": machine_id}
     except Exception as e:
         return {"message": e}

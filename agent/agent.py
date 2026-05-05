@@ -77,7 +77,7 @@ def send_heartbeat():
 
     while True:
         try:
-            httpx.get(f"http://localhost:8001/heartbeat/{mid}")
+            httpx.get(f"http://localhost:8000/heartbeat/{mid}")
         except:
             print("device failed restarting")
         time.sleep(15)
@@ -129,6 +129,7 @@ def send_to_storage(job, user_id):
 
     sp.storage.from_("RFV2").upload(f"users/{user_id}/subtasks/{os.path.basename(job)}", open(job, "rb").read())
     os.remove(job)
+    sp.table("device").update({"status":"free"}).eq("machine_id",mid).execute()
     return {"message": "File uploaded successfully"}
 
 def send_machine_failed(job):
@@ -170,7 +171,9 @@ def get_device_fingerprint():
 
 def main():
     global mid
-    mid = httpx.post(f"http://localhost:8000/register/machine/",json={"finger_print":get_device_fingerprint(),"user_id":"b83ad1b7-72b1-4baa-9dfb-a84d1b876c19"}).json()["machine_id"]
+    mid = httpx.post(f"http://localhost:8002/register/machine/",json={"finger_print":get_device_fingerprint(),"user_id":"b83ad1b7-72b1-4baa-9dfb-a84d1b876c19"}).json()
+    print(mid)
+    mid = mid["machine_id"]
     threading.Thread(target=send_heartbeat, daemon=True).start()
 
     while True:

@@ -20,7 +20,7 @@
 """
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import httpx
 
 from fastapi import FastAPI, UploadFile, File, Form
@@ -46,8 +46,15 @@ red = redis.from_url(REDIS_URL, decode_responses=True)
 #  ----- functions -----
 
 def alive_nodes_cnt():
-    # return the count of alive nodes
-    return 2
+    threshold = datetime.now(timezone.utc).timestamp()-30
+    devices = sp.table("device").select("*").execute().data
+    
+    cnt = 0
+    for d in devices:
+        last_seen = datetime.fromisoformat(d["last_seen"]).timestamp()
+        if last_seen > threshold and d["status"] == "free":
+            cnt += 1
+    return max(cnt, 1)
 
 def put_ready_queue(job_id,subtask_id):
     curtask = {
@@ -75,7 +82,7 @@ def split_job(job_id, start_frame, end_frame, format):
             "job_id": job_id,
             "subtask_id": (i-l)//size+1,
             "start_frame": i,
-            "length": min(size, r-l+1),
+            "length": min(size, r-i+1),
             "format": format,
         }
         put_ready_queue(job_id, subtask["subtask_id"])
@@ -110,11 +117,6 @@ async def register_job(
 
     return {"message": "Job registered successfully", "job_id": job_id}
 
-@app.post("/machine_failed/{job_id}")
-def machine_failed(job_id):
-    # reupload the job to the queue with priority-1
-    # update the job table to set machine_id = None @job_id
-    pass
 
 @app.post("/job_complete/{job_id}")
 def job_complete(job_id):
@@ -136,7 +138,38 @@ def job_complete(job_id):
 
 @app.get("/heartbeat/{machine_id}")
 def record_heartbeat(machine_id: str):
-    sp.table("device").update({"last_seen": datetime.now(timezone.utc).isoformat()}).eq("machine_id",machine_id).execute()
+    sp.table("device").update({"last_seen": datetime.now(timezone.utc).isoformat(),"status": "free"}).eq("machine_id",machine_id).execute()
     return {"message":"Recorded"}
+
+def check_machine():
+    while True:
+        time.sleep(17)
+
+        threshold = datetime.now(timezone.utc) - timedelta(seconds=30)
+
+        devices = sp.table("device").select("*").execute().data
+
+        for d in devices:
+            last_seen = datetime.fromisoformat(d["last_seen"])
+
+            if last_seen<threshold and d["status"] != "inactive":
+                print("HERE")
+                machine_id = d["machine_id"]
+
+                sp.table("device").update({
+                    "status": "inactive"
+                }).eq("machine_id", machine_id).execute()
+
+                subtasks = sp.table("subtask").select("*").eq("machine_id", machine_id).eq("status", "processing").execute().data
+
+                for sub in subtasks:
+
+                    sp.table("subtask").update({
+                        "machine_id": None,
+                        "status": "pending"
+                    }).eq("id", sub["id"]).execute()
+
+                    put_ready_queue(sub["job_id"], sub["subtask_id"])
+            
 
 # redis setup: https://share.google/aimode/nszQ2NXoCmcwM5jTk
