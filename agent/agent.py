@@ -58,9 +58,11 @@ def get_job():
             length=data["length"],
             format=data["format"]
         )
-        
+        sp.table("device").update({"status":"processing","last_job_id":data["job_id"]}).eq("machine_id",mid).execute()
         user_id = sp.table("job").select("user_id").eq("job_id", data["job_id"]).execute().data[0]["user_id"]
         filename = sp.table("job").select("name").eq("job_id", data["job_id"]).execute().data[0]["name"]
+        sub_cnt = sp.table("job").select("alive_cnt").eq("job_id", data["job_id"]).execute().data[0]["alive_cnt"]
+        sp.table("job").select({"alive_cnt":sub_cnt+1}).eq("job_id", data["job_id"]).execute()
         content = sp.storage.from_("RFV2").download(f"users/{user_id}/input/{filename}.blend")
         
         with open("./workplace/work.blend", "wb") as f:
@@ -129,7 +131,8 @@ def send_to_storage(job, user_id):
 
     sp.storage.from_("RFV2").upload(f"users/{user_id}/subtasks/{os.path.basename(job)}", open(job, "rb").read())
     os.remove(job)
-    sp.table("device").update({"status":"free"}).eq("machine_id",mid).execute()
+    os.remove("./workplace/work.blend")
+    sp.table("device").update({"status":"free","last_job_id":None}).eq("machine_id",mid).execute()
     return {"message": "File uploaded successfully"}
 
 def send_machine_failed(job):
@@ -171,8 +174,7 @@ def get_device_fingerprint():
 
 def main():
     global mid
-    mid = httpx.post(f"http://localhost:8002/register/machine/",json={"finger_print":get_device_fingerprint(),"user_id":"b83ad1b7-72b1-4baa-9dfb-a84d1b876c19"}).json()
-    print(mid)
+    mid = httpx.post(f"http://localhost:8000/register/machine/",json={"finger_print":get_device_fingerprint(),"user_id":"b83ad1b7-72b1-4baa-9dfb-a84d1b876c19"}).json()
     mid = mid["machine_id"]
     threading.Thread(target=send_heartbeat, daemon=True).start()
 
