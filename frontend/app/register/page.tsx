@@ -26,16 +26,11 @@ export default function Home() {
     const data = await response.json();
 
     if (response.ok) {
-
       localStorage.setItem("session_id", data.session);
       localStorage.setItem("user_id", data.user_id);
-
       router.push("/dashboard");
-
     } else {
-
-      alert(data.message);
-
+      alert("Invalid email/password");
     }
   };
 

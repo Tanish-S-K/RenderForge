@@ -73,6 +73,7 @@ export default function Home() {
 
     window.URL.revokeObjectURL(url);
   };
+  
   const downloadConfig = async () => {
 
 
@@ -161,17 +162,16 @@ export default function Home() {
 
       setMachines(data);
     };
-    const handleDownload = async (job_id: number) => {
-      const token = localStorage.getItem("session_id");
+  const handleDownload = async (job_id: number) => {
+    const token = localStorage.getItem("session_id");
 
-      const res = await fetch(
-        `http://localhost:8000/public_link?job_id=${job_id}`,
-        {
-          headers: {
-            Auth: `Bearer ${token}`,
-          },
-        }
-      );
+    const res = await fetch(
+      `http://localhost:8000/public_link?job_id=${job_id}`,
+      {
+        headers: {
+          Auth: `Bearer ${token}`,
+        },
+      });
 
       const data = await res.json();
 

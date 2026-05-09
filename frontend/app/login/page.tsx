@@ -24,7 +24,7 @@ export default function Home() {
     });
 
     const data = await response.json();
-
+    
     if (response.ok) {
 
       localStorage.setItem("session_id", data.session);
@@ -34,7 +34,7 @@ export default function Home() {
 
     } else {
 
-      alert(data.message);
+      alert("Invalid email/password");
 
     }
   };
