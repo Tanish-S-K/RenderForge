@@ -11,7 +11,7 @@ export default function Home() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleformsubmit = async (e) => {
+  const handleformsubmit = async (e: any) => {
     e.preventDefault();
 
     const response = await fetch(`${API_URL}/signup`, {
