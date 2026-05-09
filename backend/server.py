@@ -19,19 +19,23 @@
         - POST: /login/user/
 """
 
-import json
 from datetime import datetime, timezone, timedelta
 import httpx
-
+from fastapi import Depends, Header
+import shutil,zipfile,uuid
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi import BackgroundTasks
 import supabase
 import redis
 import dotenv
-import os,time
+import os,time,json
 from datetime import datetime
 import threading
 import subprocess
+from fastapi.responses import FileResponse
+import json, os, uuid
 
 dotenv.load_dotenv()
 
@@ -121,7 +125,7 @@ async def register_job(
         "user_id": user_id,
         "format": format
     }).execute()
-
+    
     sp.storage.from_(f"RFV2/users/{user_id}/input").upload(name+".blend", content)
     job_id = response.data[0]["job_id"]
     split_job(job_id, start_frame, end_frame, format)
@@ -226,8 +230,13 @@ def check_machine():
     other functions: ---
 """
 
-
+from jose import jwt
+from datetime import datetime, timedelta
 from pydantic import BaseModel
+from jose import jwt, JWTError
+
+SECRET_KEY = "YouDontKnowTheKey"
+ALGORITHM = "HS256"
 
 class LoginRequest(BaseModel):
     email : str
@@ -237,25 +246,55 @@ class Machine_Request(BaseModel):
     finger_print: str
     user_id: str
 
+def create_session(user_id: str):
+
+    payload = {
+        "user_id": user_id,
+        "exp": datetime.utcnow() + timedelta(days=7)
+    }
+
+    token = jwt.encode(
+        payload,
+        SECRET_KEY,
+        algorithm=ALGORITHM
+    )
+
+    return token
+
+def verify_session(token: str):
+
+    try:
+        payload = jwt.decode(
+            token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM]
+        )
+
+        return payload["user_id"]
+
+    except JWTError:
+        return None
+
 @app.post("/login")
 async def loginuser(data: LoginRequest):
 
-    try:
-        res = sp.auth.sign_in_with_password({
-            "email": data.email,
-            "password": data.password
-        })
+    row = sp.table("user").select("*").eq("email",data.email).execute().data
 
-        if res.session is None:
-            raise HTTPException(status_code=401, detail="Invalid credentials")
+    if not row:
+        return {"message":"Invalid credentials"}
+    password = row[0]["password"]
+    user_id = row[0]["user_id"]
+
+    if (password == data.password):
+        session_token = create_session(user_id)
 
         return {
-            "token": res.session.access_token,
-            "user_id": res.user.id
+            "message": "Login successful",
+            "session": session_token,
+            "user_id": user_id
         }
-
-    except Exception as e:
-        raise HTTPException(status_code=401, detail=str(e))
+    else:
+        return {"message":"Invalid credentials"}
 
 @app.post("/signup")
 async def register_user(data: LoginRequest):
@@ -263,34 +302,20 @@ async def register_user(data: LoginRequest):
     # signup with supabase
     # register in the database
     # create session and return
-    try:
-        res = sp.auth.sign_up({
-            "email": data.email,
-            "password": data.password
-        })
+    
+    row = sp.table("user").select("*").eq("email",data.email).execute().data
 
-        if res.user is None:
-            raise HTTPException(status_code=400, detail="Signup failed")
+    if row:
+        return {"message":"Email already exists"}
+    row = sp.table("user").insert({"email":data.email, "password":data.password}).execute()
+    user_id = row.data[0]["user_id"]
+    session_token = create_session(user_id)
 
-        user_id = res.user.id
-
-        sp.table("user").upsert({
-            "user_id": user_id
-        }).execute()
-
-        token = None
-
-        if res.session is not None:
-            token = res.session.access_token
-
-        return {
-            "token": token,
-            "user_id": user_id,
-            "message": "Signup successful"
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "message": "Registered successfully",
+        "session": session_token,
+        "user_id": user_id
+    }
 
 @app.post("/register/machine/")
 async def machine_register(data: Machine_Request):
@@ -308,50 +333,58 @@ async def machine_register(data: Machine_Request):
         sp.table("device").update({"status":"free"}).eq("machine_id",machine_id).execute()
         return {"machine_id": machine_id}
     except Exception as e:
+        print(e)
         return {"message": e}
     
-
-# --- merger ---
-"""
-    core function: merges all the subtasks @job_id and put it in output @user_id if server request it
-    other functions: --nil--
-
-"""
-
 @app.post("/merge/{job_id}")
 def merge_job(job_id):
+
     output_path = "./mergespace/"
-    
+
     result = sp.table("job").select("user_id, name").eq("job_id", job_id).execute()
     if not result.data:
         return {"error": f"No job found for job_id={job_id}"}
 
     user_id = result.data[0]["user_id"]
     name = result.data[0]["name"]
-    
-    output = sp.storage.from_("RFV2").list(f"users/{user_id}/subtasks/")
-    output.sort(key=lambda x: x['name'])
+
+    files = sp.storage.from_("RFV2").list(f"users/{user_id}/subtasks/")
+    files.sort(key=lambda x: x['name'])
+
+    file_paths = []
 
     with open(output_path + "list.txt", "wb") as f:
-        for file in output:
-            signed = sp.storage.from_('RFV2').create_signed_url(
-                f"users/{user_id}/subtasks/{file['name']}",
+        for file in files:
+
+            path = f"users/{user_id}/subtasks/{file['name']}"
+            file_paths.append(path)
+
+            signed = sp.storage.from_("RFV2").create_signed_url(
+                path,
                 3600
             )
-            url = signed['signedURL']
-            f.write(f"file '{url}'\n".encode('utf-8'))
+
+            url = signed["signedURL"]
+            f.write(f"file '{url}'\n".encode("utf-8"))
 
     subprocess.run([
-        './dependencies/ffmpeg.exe',
-        '-protocol_whitelist', 'file,http,https,tcp,tls,crypto',
-        '-f', 'concat',
-        '-safe', '0',
-        '-i', output_path + 'list.txt',
-        '-c', 'copy',
-        output_path + name + '.mp4'
+        "./dependencies/ffmpeg.exe",
+        "-protocol_whitelist", "file,http,https,tcp,tls,crypto",
+        "-f", "concat",
+        "-safe", "0",
+        "-i", output_path + "list.txt",
+        "-c", "copy",
+        output_path + name + ".mp4"
     ])
+    try:
+        sp.storage.from_("RFV2").remove(file_paths)
+    except Exception as e:
+        print("Cleanup failed:", e)
 
-    return {"message": "Reached the merger", "output_file":f"{output_path}{name}.mp4"}
+    return {
+        "message": "Merge complete",
+        "output_file": f"{output_path}{name}.mp4"
+    }
 
 @app.on_event("startup")
 def main():
@@ -362,36 +395,134 @@ def main():
 # --- frontend ---
 
 @app.get("/jobs")
-def user_jobs():
-    return [
-        {
-            "id": 1,
-            "job_name": "Frontend Developer",
-            "date_posted": "2026-05-08",
-            "download_link": "/files/job1.pdf",
-        },
-        {
-            "id": 2,
-            "job_name": "Backend Engineer",
-            "date_posted": "2026-05-07",
-            "download_link": "/files/job2.pdf",
-        },
-    ]
+def user_jobs(auth: str=Header(None)):
+    token = auth.split(" ")[1]
+    user_id = verify_session(token)
+    
+    if not user_id:
+        
+        return [{"message":"Login for details"}]
+    
+    res = sp.table("job").select("*").eq("user_id",user_id).execute().data
+    required = [
+                {"id":job["job_id"],"job_name":job["name"],"date_posted":job["created_at"],"download_link":"Not Yet","status": job["status"]}
+                for job in res
+                ]
+    
+    return required
 
 
 @app.get("/machines")
-def user_machines():
-    return [
-        {
-            "id": 1,
-            "machine_name": "Machine A",
-            "date_opened": "2026-05-01",
-            "no_of_jobs": 12,
-        },
-        {
-            "id": 2,
-            "machine_name": "Machine B",
-            "date_opened": "2026-05-03",
-            "no_of_jobs": 7,
-        },
-    ]
+def user_machines(auth: str=Header(None)):
+    token = auth.split(" ")[1]
+    user_id = verify_session(token)
+    
+    if not user_id:
+        
+        return [{"message":"Login for details"}]
+    
+    res = sp.table("device").select("*").eq("user_id",user_id).execute().data
+    required = [
+                {"id":device["machine_id"],"machine_name":device["status"],"date_opened":device["created_at"],"no_of_jobs":device["last_job_id"]}
+                for device in res
+                ]
+    
+    return required
+
+@app.get("/download/agent")
+async def download_agent(auth: str = Header(None)):
+
+    if not auth:
+        return {"message": "No session"}
+
+    token = auth.split(" ")[1]
+    user_id = verify_session(token)
+
+    if not user_id:
+        return {"message": "Invalid session"}
+
+    source_folder = "agent"
+
+    config = {
+        "user_id": user_id,
+        "server": "https://localhost:8000/"
+    }
+
+    buffer = io.BytesIO()
+
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
+
+        for root, _, files in os.walk(source_folder):
+            for file in files:
+
+                file_path = os.path.join(root, file)
+
+                arcname = os.path.relpath(file_path, source_folder)
+
+                if file == "config.json":
+                    zipf.writestr("config.json", json.dumps(config, indent=4))
+                else:
+                    zipf.write(file_path, arcname)
+
+    buffer.seek(0)
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": "attachment; filename=RF-Agent.zip"
+        }
+    )
+
+@app.get("/download/config")
+async def download_config(auth: str = Header(None)):
+
+    if not auth:
+        return {"message": "No session"}
+
+    token = auth.split(" ")[1]
+    user_id = verify_session(token)
+
+    if not user_id:
+        return {"message": "Invalid session"}
+
+    config = {
+        "user_id": user_id,
+        "server": "x",
+    
+        "SUPABASE_URL":"X",
+        "SUPABASE_KEY":"x",
+        "BLENDER_PATH" : "./blender/blender.exe",
+
+        "redis_endpoint":"x",
+        "redis_password":"x",
+
+    }
+
+    path = f"temp/config_{uuid.uuid4()}.json"
+
+    os.makedirs("temp", exist_ok=True)
+
+    with open(path, "w") as f:
+        json.dump(config, f, indent=4)
+
+    return FileResponse(
+        path,
+        filename="config.json",
+        media_type="application/json"
+    )
+
+@app.get("/public_link")
+def get_public_link(job_id: str, auth: str = Header(None)):
+
+    token = auth.split(" ")[1]
+    user_id = verify_session(token)
+
+    name = sp.table("job").select("name").eq("job_id", job_id).single().execute().data["name"]
+
+
+    path = f"users/{user_id}/output/{name}.mp4"
+
+    signed = sp.storage.from_("RFV2").create_signed_url(path, 3600)
+
+    return {"url": signed["signedURL"]}

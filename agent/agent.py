@@ -6,16 +6,20 @@
 """
 
 import redis,supabase,subprocess
-import os,time,json,dotenv,httpx
+import os,time,json,httpx,requests,zipfile
 import platform,uuid,hashlib,threading
 
-dotenv.load_dotenv()
+with open("config.json") as f:
+    config = json.load(f)
 
-SP_URL = os.getenv("SUPABASE_URL")
-SP_KEY = os.getenv("SUPABASE_KEY")
-REDIS_ENDPOINT = os.getenv("redis_endpoint")
-REDIS_PASSWORD = os.getenv("redis_password")
-BLENDER_PATH = os.getenv("BLENDER_PATH")
+SP_URL = config["SUPABASE_URL"]
+SP_KEY = config["SUPABASE_KEY"]
+REDIS_ENDPOINT = config["redis_endpoint"]
+REDIS_PASSWORD = config["redis_password"]
+BLENDER_PATH = config["BLENDER_PATH"]
+USER_ID = config["user_id"]
+SERVER = config["server"]
+BLENDER_URL = "https://download.blender.org/release/Blender3.6/blender-3.6.0-windows-x64.zip"
 
 mid = None
 
@@ -25,7 +29,6 @@ REDIS_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_ENDPOINT}"
 red = redis.from_url(REDIS_URL, decode_responses=True)
 sp = supabase.create_client(SP_URL,SP_KEY)
 
-# subjob structure:    id, subtask_id, start_frame, lenght, format, status, timestamp, machine_id.
 
 class subjob:
     def __init__(self, job_id, subtask_id, start_frame, length, format):
@@ -79,7 +82,7 @@ def send_heartbeat():
 
     while True:
         try:
-            httpx.get(f"http://localhost:8000/heartbeat/{mid}")
+            httpx.get(f"{SERVER}/heartbeat/{mid}")
         except:
             print("device failed restarting")
         time.sleep(15)
@@ -135,12 +138,6 @@ def send_to_storage(job, user_id):
     sp.table("device").update({"status":"free","last_job_id":None}).eq("machine_id",mid).execute()
     return {"message": "File uploaded successfully"}
 
-def send_machine_failed(job):
-
-    # api route: /machine_failed/{job_id}
-    # post request to api route;
-    pass
-
 def report_job_done(job):
     # in the job table update alive -= 1 @job_id
     # if alive == 0 then report to api route /job_complete/{job_id}
@@ -149,7 +146,7 @@ def report_job_done(job):
     sp.rpc("decrement_alive_cnt", {"jid": job.job_id}).execute()
 
     if (sp.table("job").select("alive_cnt").eq("job_id", job.job_id).execute().data[0]["alive_cnt"] == 0):
-        return httpx.post(f"http://localhost:8000/job_complete/{job.job_id}",timeout=None)
+        return httpx.post(f"{SERVER}/job_complete/{job.job_id}",timeout=None)
     return {"message": "Job reported as done"}
 
 
@@ -172,11 +169,32 @@ def get_device_fingerprint():
 
     return str(fingerprint)
 
+def ensure_blender():
+    if os.path.exists("./blender/blender.exe"):
+        return
+
+    print("Downloading Blender...")
+
+    os.makedirs("blender", exist_ok=True)
+
+    zip_path = "blender.zip"
+
+    r = requests.get(BLENDER_URL, stream=True)
+    with open(zip_path, "wb") as f:
+        for chunk in r.iter_content(chunk_size=8192):
+            f.write(chunk)
+
+    with zipfile.ZipFile(zip_path, "r") as zip_ref:
+        zip_ref.extractall("./blender")
+
+    os.remove(zip_path)
+
 def main():
     global mid
-    mid = httpx.post(f"http://localhost:8000/register/machine/",json={"finger_print":get_device_fingerprint(),"user_id":"b83ad1b7-72b1-4baa-9dfb-a84d1b876c19"}).json()
+    mid = httpx.post(f"{SERVER}/register/machine/",json={"finger_print":get_device_fingerprint(),"user_id":USER_ID}).json()
     mid = mid["machine_id"]
     threading.Thread(target=send_heartbeat, daemon=True).start()
+    ensure_blender()
 
     while True:
         # check for the job
@@ -195,9 +213,6 @@ def main():
 
         rendered_job = render_job(url, job.start_frame, job.length, job.subtask_id)
         
-        if not rendered_job:
-            send_machine_failed(job)
-            continue
         user_id = sp.table("job").select("user_id").eq("job_id", job.job_id).execute().data[0]["user_id"]
         
         send_to_storage(rendered_job, user_id)
