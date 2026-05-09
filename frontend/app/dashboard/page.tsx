@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 type Job = {
   id: number;
   job_name: string;
@@ -44,7 +46,7 @@ export default function Home() {
     }
 
     const response = await fetch(
-      "http://localhost:8000/download/agent",
+      `${API_URL}/download/agent`,
       {
         headers: {
           Auth: `Bearer ${token}`,
@@ -80,7 +82,7 @@ export default function Home() {
     const token = localStorage.getItem("session_id");
 
     const response = await fetch(
-      "http://localhost:8000/download/config",
+      `${API_URL}/download/config`,
       {
         headers: {
           Auth: `Bearer ${token}`,
@@ -139,7 +141,7 @@ export default function Home() {
   }, [token]);
 
   const fetchJobs = async () => {
-    const res = await fetch("http://localhost:8000/jobs", {
+    const res = await fetch(`${API_URL}/jobs`, {
       headers: {
         Auth: `Bearer ${token}`,
       },
@@ -152,7 +154,7 @@ export default function Home() {
   };
 
   const fetchMachines = async () => {
-    const res = await fetch("http://localhost:8000/machines", {
+    const res = await fetch(`${API_URL}/machines`, {
         headers: {
           Auth: `Bearer ${token}`,
         },
@@ -166,7 +168,7 @@ export default function Home() {
     const token = localStorage.getItem("session_id");
 
     const res = await fetch(
-      `http://localhost:8000/public_link?job_id=${job_id}`,
+      `${API_URL}/public_link?job_id=${job_id}`,
       {
         headers: {
           Auth: `Bearer ${token}`,
@@ -206,7 +208,7 @@ export default function Home() {
     }
 
     const res = await fetch(
-      "http://localhost:8000/register/job/",
+      `${API_URL}/register/job/`,
       {
         method: "POST",
         body: formData,

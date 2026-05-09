@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 import {useRouter} from "next/navigation";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 export default function Home() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -12,7 +14,7 @@ export default function Home() {
   const handleformsubmit = async (e) => {
     e.preventDefault();
 
-    const response = await fetch("http://localhost:8000/signup", {
+    const response = await fetch(`${API_URL}/signup`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
