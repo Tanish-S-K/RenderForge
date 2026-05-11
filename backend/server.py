@@ -19,36 +19,31 @@
         - POST: /login/user/
 """
 
-from datetime import datetime, timezone, timedelta
-import httpx
-from fastapi import Depends, Header
-import shutil,zipfile,uuid
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from fastapi import BackgroundTasks
-import supabase
-import redis
-import dotenv
-import os,time,json
-from datetime import datetime
-import threading
-import subprocess
-from fastapi.responses import FileResponse
-import json, os, uuid
+from datetime import datetime, timezone, timedelta
+from pydantic import BaseModel
+from jose import JWTError
+import os, time, json, uuid, threading, subprocess, jwt
+import dotenv, redis, supabase, httpx
 
 dotenv.load_dotenv()
 
 SP_URL = os.getenv("SUPABASE_URL")
 SP_KEY = os.getenv("SUPABASE_KEY")
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
+
 REDIS_ENDPOINT = os.getenv("redis_endpoint")
 REDIS_PASSWORD = os.getenv("redis_password")
+
+
 REDIS_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_ENDPOINT}"
 
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -117,7 +112,7 @@ async def register_job(
     ):
     length = end_frame - start_frame + 1
     content = await file.read()
-
+    
     response = sp.table("job").insert({
         "start_frame": start_frame,
         "length": length,
@@ -126,7 +121,7 @@ async def register_job(
         "format": format
     }).execute()
     
-    sp.storage.from_(f"RFV2/users/{user_id}/input").upload(name+".blend", content)
+    sp.storage.from_("RFV2").upload(f"users/{user_id}/input/"+name+".blend", content)
     job_id = response.data[0]["job_id"]
     split_job(job_id, start_frame, end_frame, format)
 
@@ -431,47 +426,29 @@ def user_machines(auth: str=Header(None)):
 
 @app.get("/download/agent")
 async def download_agent(auth: str = Header(None)):
-
+    
     if not auth:
         return {"message": "No session"}
-
+    
     token = auth.split(" ")[1]
     user_id = verify_session(token)
 
     if not user_id:
         return {"message": "Invalid session"}
+    print("HI")
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-    source_folder = "agent"
-
-    config = {
-        "user_id": user_id,
-        "server": "https://localhost:8000/"
-    }
-
-    buffer = io.BytesIO()
-
-    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
-
-        for root, _, files in os.walk(source_folder):
-            for file in files:
-
-                file_path = os.path.join(root, file)
-
-                arcname = os.path.relpath(file_path, source_folder)
-
-                if file == "config.json":
-                    zipf.writestr("config.json", json.dumps(config, indent=4))
-                else:
-                    zipf.write(file_path, arcname)
-
-    buffer.seek(0)
-
-    return StreamingResponse(
-        buffer,
-        media_type="application/zip",
-        headers={
-            "Content-Disposition": "attachment; filename=RF-Agent.zip"
-        }
+    zip_path = os.path.join(
+        BASE_DIR,
+        "agent_template",
+        "agent.zip"
+    )
+    print("ZIP PATH:", zip_path)
+    print("EXISTS:", os.path.exists(zip_path))
+    return FileResponse(
+        path=zip_path,
+        filename="RF-Agent.zip",
+        media_type="application/zip"
     )
 
 @app.get("/download/config")
@@ -488,15 +465,11 @@ async def download_config(auth: str = Header(None)):
 
     config = {
         "user_id": user_id,
-        "server": "x",
+        "server": "https://retention-toilet-jim-assumed.trycloudflare.com",
     
-        "SUPABASE_URL":"X",
-        "SUPABASE_KEY":"x",
-        "BLENDER_PATH" : "./blender/blender.exe",
-
-        "redis_endpoint":"x",
-        "redis_password":"x",
-
+        "SUPABASE_URL":"https://bjiuyxfyjaemcecjbvaw.supabase.co",
+        "SUPABASE_KEY":"sb_publishable_oY_Gr3fwlMcbZM96N_90hw_yGwSWYk0",
+        "BLENDER_PATH" : "./blender/blender.exe"
     }
 
     path = f"temp/config_{uuid.uuid4()}.json"
@@ -526,3 +499,47 @@ def get_public_link(job_id: str, auth: str = Header(None)):
     signed = sp.storage.from_("RFV2").create_signed_url(path, 3600)
 
     return {"url": signed["signedURL"]}
+
+@app.post("/download/token")
+def generate_download_url(data: dict):
+    url = f"users/{data['user_id']}/input/{data['filename']}.blend"
+    res = sp.storage.from_("RFV2").create_signed_url(url,600)
+    return {"token" : res["signedURL"]}
+
+@app.post("/upload/token")
+def generate_upload_url(data: dict):
+    url = f"users/{data['user_id']}/subtasks/{data['filename']}"
+    res = sp.storage.from_("RFV2").create_signed_upload_url(url)
+    return {"path":url,"token" : res["token"]}
+
+@app.post("/task/token")
+def generate_table_token(data: dict):
+
+    job_id = data["job_id"]
+    subtask_id = data["subtask_id"]
+    machine_id = data["machine_id"]
+
+    payload = {
+        "sub": str(machine_id),
+        "role": "authenticated",
+        "aud": "authenticated",
+
+        "job_id": job_id,
+        "subtask_id": subtask_id,
+
+        "exp": int(time.time()) + 600
+    }
+
+    token = jwt.encode(
+        payload,
+        SUPABASE_JWT_SECRET,
+        algorithm="HS256"
+    )
+
+    return {
+        "token": token
+    }
+
+@app.post("/get_job")
+def zpop():
+    return {"item":red.zpopmin("ready_queue")}

@@ -55,3 +55,10 @@ remaining task as of 5/5/2026
 === came up with a version 2 design of the project to make the agent handling
 === and tokenizing of the session for agent to access the database easier
 === Made the first frontend design, optimised for ease of access
+
+6/5/26 - 10/5/26
+
+	--- implemented the designed frontend
+	--- created the session for user login
+	--- made the agent into downloadable, and executable file
+	

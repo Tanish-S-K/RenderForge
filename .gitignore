@@ -1,6 +1,7 @@
 .env
 agent/blender/
 backend/dependencies/
+backend/agent_template/
 frontend/node_modules
 agent/config.json
 agent/build/

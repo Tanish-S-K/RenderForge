@@ -1,9 +1,0 @@
-{
-    "user_id": "fae05180-1adc-4013-9d89-c74073089fa2",
-    "server": "http://localhost:8000",
-    "SUPABASE_URL": "https://bjiuyxfyjaemcecjbvaw.supabase.co",
-    "SUPABASE_KEY ": "sb_secret_ZVtsGifBtJncAYrJmunIow_AWrjGnnB",
-    "BLENDER_PATH": "./blender/blender.exe",
-    "redis_endpoint": "redis-13713.crce292.ap-south-1-2.ec2.cloud.redislabs.com:13713",
-    "redis_password": "uu59oeDoa80VGTMh4RzuxRemaL4zwVkG"
-}

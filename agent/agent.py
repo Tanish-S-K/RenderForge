@@ -6,7 +6,7 @@
 """
 
 import redis,supabase,subprocess
-import os,time,json,httpx,requests,zipfile
+import os,time,json,httpx,requests,zipfile,shutil
 import platform,uuid,hashlib,threading
 
 with open("config.json") as f:
@@ -14,21 +14,14 @@ with open("config.json") as f:
 
 SP_URL = config["SUPABASE_URL"]
 SP_KEY = config["SUPABASE_KEY"]
-REDIS_ENDPOINT = config["redis_endpoint"]
-REDIS_PASSWORD = config["redis_password"]
 BLENDER_PATH = config["BLENDER_PATH"]
 USER_ID = config["user_id"]
 SERVER = config["server"]
-BLENDER_URL = "https://download.blender.org/release/Blender3.6/blender-3.6.0-windows-x64.zip"
+BLENDER_URL = "https://download.blender.org/release/Blender4.2/blender-4.2.11-windows-x64.zip"
 
 mid = None
 
-REDIS_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_ENDPOINT}"
-
-
-red = redis.from_url(REDIS_URL, decode_responses=True)
 sp = supabase.create_client(SP_URL,SP_KEY)
-
 
 class subjob:
     def __init__(self, job_id, subtask_id, start_frame, length, format):
@@ -48,9 +41,18 @@ def get_job():
         # download the file from storage 
         # return file path,subjob object
     # return None
-
-    if red.zcard("ready_queue") >0:
-        data = json.loads(red.zpopmin("ready_queue")[0][0])
+    item = httpx.post(f"{SERVER}/get_job").json()["item"]
+    if item:
+        data = json.loads(item[0][0])
+        r = httpx.post(
+            f"{SERVER}/task/token",
+            json={
+                "job_id": data["job_id"],
+                "subtask_id": data["subtask_id"],
+                "machine_id": mid
+            }
+        )
+        sp.postgrest.auth(r.json()["token"])
         sp.table("subtask").update({"status": "processing", "machine_id": mid}).eq("job_id", data["job_id"]).eq("subtask_id", data["subtask_id"]).execute()
         data = sp.table("subtask").select("*").eq("job_id", data["job_id"]).eq("subtask_id", data["subtask_id"]).execute().data[0]
 
@@ -61,13 +63,19 @@ def get_job():
             length=data["length"],
             format=data["format"]
         )
+        
         sp.table("device").update({"status":"processing","last_job_id":data["job_id"]}).eq("machine_id",mid).execute()
         user_id = sp.table("job").select("user_id").eq("job_id", data["job_id"]).execute().data[0]["user_id"]
         filename = sp.table("job").select("name").eq("job_id", data["job_id"]).execute().data[0]["name"]
         sub_cnt = sp.table("job").select("alive_cnt").eq("job_id", data["job_id"]).execute().data[0]["alive_cnt"]
-        sp.table("job").select({"alive_cnt":sub_cnt+1}).eq("job_id", data["job_id"]).execute()
-        content = sp.storage.from_("RFV2").download(f"users/{user_id}/input/{filename}.blend")
-        
+        sp.table("job").update({"alive_cnt":sub_cnt+1}).eq("job_id", data["job_id"]).execute()
+        signed_url = httpx.post(
+            f"{SERVER}/download/token",
+            json = {
+                "user_id":user_id,
+                "filename": filename
+            })
+        content = httpx.get(signed_url.json()["token"]).content
         with open("./workplace/work.blend", "wb") as f:
             f.write(content)
 
@@ -131,8 +139,14 @@ def send_to_storage(job, user_id):
     
     # get storge url using the object_id;
     # upload the file with name id+subtask_id to the storage;
-
-    sp.storage.from_("RFV2").upload(f"users/{user_id}/subtasks/{os.path.basename(job)}", open(job, "rb").read())
+    signed_url = httpx.post(
+            f"{SERVER}/upload/token",
+            json = {
+                "user_id":user_id,
+                "filename": os.path.basename(job)
+            }).json()
+    sp.storage.from_("RFV2").upload_to_signed_url(path=signed_url["path"],token=signed_url["token"], file=open(job, "rb").read())
+    
     os.remove(job)
     os.remove("./workplace/work.blend")
     sp.table("device").update({"status":"free","last_job_id":None}).eq("machine_id",mid).execute()
@@ -170,6 +184,7 @@ def get_device_fingerprint():
     return str(fingerprint)
 
 def ensure_blender():
+
     if os.path.exists("./blender/blender.exe"):
         return
 
@@ -179,21 +194,52 @@ def ensure_blender():
 
     zip_path = "blender.zip"
 
-    r = requests.get(BLENDER_URL, stream=True)
+    r = requests.get(
+        BLENDER_URL,
+        stream=True
+    )
+    r.raise_for_status()
+    total = int(r.headers.get("content-length", 0))
+
+    downloaded = 0
+
     with open(zip_path, "wb") as f:
-        for chunk in r.iter_content(chunk_size=8192):
+
+        for chunk in r.iter_content(
+            chunk_size=1024 * 1024
+        ):
+
+            if not chunk: continue
             f.write(chunk)
+            downloaded += len(chunk)
+
+            if total:
+
+                percent = (downloaded/total)*100
+                print(f"\rDownloaded {downloaded/1024/1024:.2f} MB / {total/1024/1024:.2f} MB ({percent:.1f}%)",end="")
+
+    print("\nExtracting Blender...")
 
     with zipfile.ZipFile(zip_path, "r") as zip_ref:
-        zip_ref.extractall("./blender")
+        zip_ref.extractall(".")
 
     os.remove(zip_path)
+    for item in os.listdir("."):
+
+        if item.startswith("blender-") and os.path.isdir(item):
+            if os.path.exists("./blender"):
+                shutil.rmtree("./blender")
+            os.rename(item, "./blender")
+            break
+
+    print("Blender installed successfully")
 
 def main():
     global mid
     mid = httpx.post(f"{SERVER}/register/machine/",json={"finger_print":get_device_fingerprint(),"user_id":USER_ID}).json()
     mid = mid["machine_id"]
     threading.Thread(target=send_heartbeat, daemon=True).start()
+    
     ensure_blender()
 
     while True:
@@ -210,7 +256,7 @@ def main():
             time.sleep(5)
             continue
         url,job = job
-
+        
         rendered_job = render_job(url, job.start_frame, job.length, job.subtask_id)
         
         user_id = sp.table("job").select("user_id").eq("job_id", job.job_id).execute().data[0]["user_id"]
