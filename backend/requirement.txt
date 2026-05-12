@@ -6,5 +6,4 @@ supabase
 httpx
 python-jose
 PyJWT
-Request
 python-multipart

@@ -19,7 +19,7 @@
         - POST: /login/user/
 """
 
-from fastapi import FastAPI, UploadFile, File, Form, Header
+from fastapi import FastAPI, UploadFile, File, Form, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from datetime import datetime, timezone, timedelta
@@ -27,7 +27,6 @@ from pydantic import BaseModel
 from jose import JWTError
 import os, time, json, uuid, threading, subprocess, jwt
 import dotenv, redis, supabase, httpx
-import Request
 
 dotenv.load_dotenv()
 
