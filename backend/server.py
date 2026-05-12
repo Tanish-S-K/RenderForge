@@ -423,8 +423,9 @@ def user_machines(authorization: str=Header(None)):
     return required
 
 @app.get("/download/agent")
-async def download_agent(authorization: str = Header(None)):
-    
+async def download_agent(request: Request, authorization: str = Header(None)):
+    print("HEADERS RECEIVED:", dict(request.headers))
+    print("AUTH PARAM:", authorization)
     if not authorization:
         return {"message": "No session"}
     
