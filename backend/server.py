@@ -134,16 +134,25 @@ def job_complete(job_id):
 
     if (cnt == 0):
         response = httpx.post(f"http://{SERVER}/merge/{job_id}",timeout=None)
-        output_file = response.json()["output_file"]
-        content = open(output_file,"rb").read()
+        try:output_file = response.json()["output_file"]
+        except: return {"message": "return type wrong"}
 
-        name = sp.table("job").select("name").eq("job_id",job_id).execute().data[0]["name"]
-        user_id = sp.table("job").select("user_id").eq("job_id",job_id).execute().data[0]["user_id"]
+        try: content = open(output_file,"rb").read()
+        except: return {"message": "output file reading"}
+        try:
+            name = sp.table("job").select("name").eq("job_id",job_id).execute().data[0]["name"]
+            user_id = sp.table("job").select("user_id").eq("job_id",job_id).execute().data[0]["user_id"]
+        except: 
+            return {"message": "table job wrong"}
+        try:
+            sp.storage.from_("RFV2").upload(f"users/{user_id}/output/{name}.mp4",content)
+            sp.table("job").update({"status":"done"}).eq("job_id",job_id).execute()
+        except: return {"message": "upload"}
+        try:
+            os.remove("./mergespace/list.txt")
+            os.remove(f"./mergespace/{name}.mp4")
+        except: return {"message": "clean"}
 
-        sp.storage.from_("RFV2").upload(f"users/{user_id}/output/{name}.mp4",content)
-        sp.table("job").update({"status":"done"}).eq("job_id",job_id).execute()
-        os.remove("./mergespace/list.txt")
-        os.remove(f"./mergespace/{name}.mp4")
         return {"message": "Merged successfully"}
     else:
         return {"message": "Invalid request, job not complete yet"}
@@ -376,6 +385,7 @@ def merge_job(job_id):
         sp.storage.from_("RFV2").remove(file_paths)
     except Exception as e:
         print("Cleanup failed:", e)
+        return {"message" : e}
 
     return {
         "message": "Merge complete",
