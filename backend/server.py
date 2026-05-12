@@ -334,7 +334,7 @@ async def machine_register(data: Machine_Request):
 def merge_job(job_id):
 
     output_path = "./mergespace/"
-
+    os.makedirs(output_path, exist_ok=True)
     result = sp.table("job").select("user_id, name").eq("job_id", job_id).execute()
     if not result.data:
         return {"error": f"No job found for job_id={job_id}"}
