@@ -328,7 +328,6 @@ async def machine_register(data: Machine_Request):
         sp.table("device").update({"status":"free"}).eq("machine_id",machine_id).execute()
         return {"machine_id": machine_id}
     except Exception as e:
-        print(e)
         return {"message": e}
     
 @app.post("/merge/{job_id}")
@@ -434,7 +433,7 @@ async def download_agent(authorization: str = Header(None)):
 
     if not user_id:
         return {"message": "Invalid session"}
-    print("HI")
+    
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
     zip_path = os.path.join(
@@ -442,8 +441,7 @@ async def download_agent(authorization: str = Header(None)):
         "agent_template",
         "agent.zip"
     )
-    print("ZIP PATH:", zip_path)
-    print("EXISTS:", os.path.exists(zip_path))
+    
     return FileResponse(
         path=zip_path,
         filename="RF-Agent.zip",
@@ -464,7 +462,7 @@ async def download_config(authorization: str = Header(None)):
 
     config = {
         "user_id": user_id,
-        "server": "https://retention-toilet-jim-assumed.trycloudflare.com",
+        "server": "https://rica-long-surge-refine.trycloudflare.com",
     
         "SUPABASE_URL":"https://bjiuyxfyjaemcecjbvaw.supabase.co",
         "SUPABASE_KEY":"sb_publishable_oY_Gr3fwlMcbZM96N_90hw_yGwSWYk0",
