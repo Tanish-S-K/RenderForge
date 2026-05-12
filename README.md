@@ -36,7 +36,7 @@ User downloads finished render
 
 ## Architecture
 
-![Architecture Diagram](https://raw.githubusercontent.com/Tanish-S-K/RenderForge/abba15e0c40def88a0a33502fc71ddf2fcdc54c4/blog/artifacts/Design_V2.jpg)
+![Architecture Diagram](blog/artifacts/Design_V2.jpg)
 
 ### Components
 
