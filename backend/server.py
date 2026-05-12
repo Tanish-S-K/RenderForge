@@ -390,12 +390,11 @@ def main():
 # --- frontend ---
 
 @app.get("/jobs")
-def user_jobs(auth: str=Header(None)):
-    token = auth.split(" ")[1]
+def user_jobs(authorization: str=Header(None)):
+    token = authorization.split(" ")[1]
     user_id = verify_session(token)
     
     if not user_id:
-        
         return [{"message":"Login for details"}]
     
     res = sp.table("job").select("*").eq("user_id",user_id).execute().data
@@ -408,8 +407,8 @@ def user_jobs(auth: str=Header(None)):
 
 
 @app.get("/machines")
-def user_machines(auth: str=Header(None)):
-    token = auth.split(" ")[1]
+def user_machines(authorization: str=Header(None)):
+    token = authorization.split(" ")[1]
     user_id = verify_session(token)
     
     if not user_id:
@@ -425,12 +424,12 @@ def user_machines(auth: str=Header(None)):
     return required
 
 @app.get("/download/agent")
-async def download_agent(auth: str = Header(None)):
+async def download_agent(authorization: str = Header(None)):
     
-    if not auth:
+    if not authorization:
         return {"message": "No session"}
     
-    token = auth.split(" ")[1]
+    token = authorization.split(" ")[1]
     user_id = verify_session(token)
 
     if not user_id:
@@ -452,12 +451,12 @@ async def download_agent(auth: str = Header(None)):
     )
 
 @app.get("/download/config")
-async def download_config(auth: str = Header(None)):
+async def download_config(authorization: str = Header(None)):
 
-    if not auth:
+    if not authorization:
         return {"message": "No session"}
 
-    token = auth.split(" ")[1]
+    token = authorization.split(" ")[1]
     user_id = verify_session(token)
 
     if not user_id:
@@ -486,9 +485,9 @@ async def download_config(auth: str = Header(None)):
     )
 
 @app.get("/public_link")
-def get_public_link(job_id: str, auth: str = Header(None)):
+def get_public_link(job_id: str, authorization: str = Header(None)):
 
-    token = auth.split(" ")[1]
+    token = authorization.split(" ")[1]
     user_id = verify_session(token)
 
     name = sp.table("job").select("name").eq("job_id", job_id).single().execute().data["name"]

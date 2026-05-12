@@ -49,7 +49,7 @@ export default function Home() {
       `${API_URL}/download/agent`,
       {
         headers: {
-          Auth: `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
       }
     );
@@ -85,7 +85,7 @@ export default function Home() {
       `${API_URL}/download/config`,
       {
         headers: {
-          Auth: `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
       }
     );
@@ -143,7 +143,7 @@ export default function Home() {
   const fetchJobs = async () => {
     const res = await fetch(`${API_URL}/jobs`, {
       headers: {
-        Auth: `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
       },
     });
     
@@ -156,7 +156,7 @@ export default function Home() {
   const fetchMachines = async () => {
     const res = await fetch(`${API_URL}/machines`, {
         headers: {
-          Auth: `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
       });
 
@@ -171,7 +171,7 @@ export default function Home() {
       `${API_URL}/public_link?job_id=${job_id}`,
       {
         headers: {
-          Auth: `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
       });
 
