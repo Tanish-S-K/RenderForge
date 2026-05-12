@@ -2,7 +2,7 @@
 
 A distributed Blender render farm that splits rendering jobs across multiple agents, dramatically reducing render times through parallelization.
 
-🔗 **[Live Demo](https://render-forge.vercel.app/)**
+🔗 **[Live Demo](https://render-forge.vercel.app/)** • Open Source
 
 ---
 
@@ -208,3 +208,7 @@ Contributions are welcome!
 ## License
 
 MIT
+
+---
+
+*Created by [Tanish S K](https://github.com/Tanish-S-K) during college.*
