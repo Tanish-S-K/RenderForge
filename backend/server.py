@@ -27,6 +27,7 @@ from pydantic import BaseModel
 from jose import JWTError
 import os, time, json, uuid, threading, subprocess, jwt
 import dotenv, redis, supabase, httpx
+import Request
 
 dotenv.load_dotenv()
 
