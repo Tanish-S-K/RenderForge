@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: rf-backend
+    env: python
+
+    buildCommand: bash build.sh
+
+    startCommand: uvicorn server:app --host 0.0.0.0 --port 10000
+
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+
+      - key: SUPABASE_KEY
+        sync: false
+
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+
+      - key: redis_endpoint
+        sync: false
+
+      - key: redis_password
+        sync: false

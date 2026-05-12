@@ -362,7 +362,7 @@ def merge_job(job_id):
             f.write(f"file '{url}'\n".encode("utf-8"))
 
     subprocess.run([
-        "./dependencies/ffmpeg.exe",
+        "ffmpeg",
         "-protocol_whitelist", "file,http,https,tcp,tls,crypto",
         "-f", "concat",
         "-safe", "0",
