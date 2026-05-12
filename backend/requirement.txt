@@ -1,5 +1,5 @@
 fastapi
-uvicorn
+uvicorn[standard]
 python-dotenv
 redis
 supabase
@@ -7,4 +7,3 @@ httpx
 python-jose
 PyJWT
 python-multipart
-jwt
