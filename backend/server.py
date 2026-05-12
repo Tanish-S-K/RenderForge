@@ -346,20 +346,22 @@ def merge_job(job_id):
     files.sort(key=lambda x: x['name'])
 
     file_paths = []
+    try:
+        with open(output_path + "list.txt", "wb") as f:
+            for file in files:
 
-    with open(output_path + "list.txt", "wb") as f:
-        for file in files:
+                path = f"users/{user_id}/subtasks/{file['name']}"
+                file_paths.append(path)
 
-            path = f"users/{user_id}/subtasks/{file['name']}"
-            file_paths.append(path)
+                signed = sp.storage.from_("RFV2").create_signed_url(
+                    path,
+                    3600
+                )
 
-            signed = sp.storage.from_("RFV2").create_signed_url(
-                path,
-                3600
-            )
-
-            url = signed["signedURL"]
-            f.write(f"file '{url}'\n".encode("utf-8"))
+                url = signed["signedURL"]
+                f.write(f"file '{url}'\n".encode("utf-8"))
+    except Exception as e:
+        return {"message": e}
 
     subprocess.run([
         "ffmpeg",
