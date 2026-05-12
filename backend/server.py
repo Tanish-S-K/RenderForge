@@ -33,7 +33,7 @@ dotenv.load_dotenv()
 SP_URL = os.getenv("SUPABASE_URL")
 SP_KEY = os.getenv("SUPABASE_KEY")
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET")
-
+SERVER = "https://renderforge.onrender.com"
 REDIS_ENDPOINT = os.getenv("redis_endpoint")
 REDIS_PASSWORD = os.getenv("redis_password")
 
@@ -133,7 +133,7 @@ def job_complete(job_id):
     cnt = sp.table("job").select("alive_cnt").eq("job_id", job_id).execute().data[0]["alive_cnt"]
 
     if (cnt == 0):
-        response = httpx.post(f"http://localhost:8000/merge/{job_id}",timeout=None)
+        response = httpx.post(f"http://{SERVER}/merge/{job_id}",timeout=None)
         output_file = response.json()["output_file"]
         content = open(output_file,"rb").read()
 
@@ -463,7 +463,7 @@ async def download_config(authorization: str = Header(None)):
 
     config = {
         "user_id": user_id,
-        "server": "https://renderforge.onrender.com",
+        "server": SERVER,
     
         "SUPABASE_URL":"https://bjiuyxfyjaemcecjbvaw.supabase.co",
         "SUPABASE_KEY":"sb_publishable_oY_Gr3fwlMcbZM96N_90hw_yGwSWYk0",
