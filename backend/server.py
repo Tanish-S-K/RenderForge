@@ -463,7 +463,7 @@ async def download_config(authorization: str = Header(None)):
 
     config = {
         "user_id": user_id,
-        "server": "https://rica-long-surge-refine.trycloudflare.com",
+        "server": "https://renderforge.onrender.com",
     
         "SUPABASE_URL":"https://bjiuyxfyjaemcecjbvaw.supabase.co",
         "SUPABASE_KEY":"sb_publishable_oY_Gr3fwlMcbZM96N_90hw_yGwSWYk0",

@@ -4,3 +4,4 @@ backend/dependencies/
 frontend/node_modules
 agent/config.json
 agent/build/
+backend/venv
