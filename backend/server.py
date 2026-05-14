@@ -133,7 +133,7 @@ def job_complete(job_id):
     try: cnt = sp.table("job").select("alive_cnt").eq("job_id", job_id).execute().data[0]["alive_cnt"]
     except: return {"message": "the table alive_cnt access wrong"}
     if (cnt == 0):
-        try: response = httpx.post(f"http://{SERVER}/merge/{job_id}",timeout=None)
+        try: response = httpx.post(f"{SERVER}/merge/{job_id}",timeout=None)
         except: return {"message": "http merge requestn wrong"}
         try:output_file = response.json()["output_file"]
         except: return {"message": "return type wrong"}
