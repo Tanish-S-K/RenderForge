@@ -385,6 +385,11 @@ def merge_job(job_id):
         "-c", "copy",
         output_path + name + ".mp4"
     ])
+    try:
+        sp.storage.from_("RFV2").remove(file_paths)
+    except Exception as e:
+        print("Cleanup failed:", e)
+        return {"message" : e}
 
     return {
         "message": "Merge complete",
