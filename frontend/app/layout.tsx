@@ -1,22 +1,15 @@
-import Link from "next/link";
+import type { Metadata } from "next";
 import "./globals.css";
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export const metadata: Metadata = {
+  title: "RenderForge",
+  description: "Distributed Blender rendering",
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen flex flex-col">
-        <main className="flex-1">
-          {children}
-        </main>
-        
-        <footer className="p-4 border-t">
-          Contact Us
-        </footer>
-      </body>
+      <body className="antialiased">{children}</body>
     </html>
   );
 }

@@ -355,15 +355,18 @@ def merge_job(job_id):
     name = result.data[0]["name"]
 
     files = sp.storage.from_("RFV2").list(f"users/{user_id}/subtasks/")
+    print(user_id)
     files.sort(key=lambda x: x['name'])
 
     file_paths = []
     try:
         os.makedirs(output_path, exist_ok=True)
+        
         with open(output_path + "list.txt", "wb") as f:
             for file in files:
 
                 path = f"users/{user_id}/subtasks/{file['name']}"
+                print("path :", path)
                 file_paths.append(path)
 
                 signed = sp.storage.from_("RFV2").create_signed_url(
@@ -377,7 +380,7 @@ def merge_job(job_id):
         return {"message": e}
 
     subprocess.run([
-        "ffmpeg",
+        "./dependencies/ffmpeg",
         "-protocol_whitelist", "file,http,https,tcp,tls,crypto",
         "-f", "concat",
         "-safe", "0",
@@ -557,3 +560,4 @@ def generate_table_token(data: dict):
 @app.post("/get_job")
 def zpop():
     return {"item":red.zpopmin("ready_queue")}
+
