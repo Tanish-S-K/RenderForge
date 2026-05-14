@@ -359,6 +359,7 @@ def merge_job(job_id):
 
     file_paths = []
     try:
+        os.makedirs(output_path, exist_ok=True)
         with open(output_path + "list.txt", "wb") as f:
             for file in files:
 
@@ -384,11 +385,6 @@ def merge_job(job_id):
         "-c", "copy",
         output_path + name + ".mp4"
     ])
-    try:
-        sp.storage.from_("RFV2").remove(file_paths)
-    except Exception as e:
-        print("Cleanup failed:", e)
-        return {"message" : e}
 
     return {
         "message": "Merge complete",
