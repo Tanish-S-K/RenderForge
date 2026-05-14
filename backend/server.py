@@ -135,11 +135,10 @@ def job_complete(job_id):
     if (cnt == 0):
         try: 
             response = httpx.post(f"{SERVER}/merge/{job_id}",timeout=None)
-            return response
         except: return {"message": "http merge requestn wrong"}
         
         try: output_file = response.json()["output_file"]
-        except: return {"message": response}
+        except: return {"message": response.json()}
 
         try: content = open(output_file,"rb").read()
         except: return {"message": "output file reading"}
