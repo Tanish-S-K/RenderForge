@@ -172,8 +172,6 @@ def record_heartbeat(machine_id: str):
 def check_machine():
     while True:
         try:
-            time.sleep(17)
-
             threshold = datetime.now(timezone.utc) - timedelta(seconds=30)
 
             devices = sp.table("device").select("*").execute().data
