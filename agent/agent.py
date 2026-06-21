@@ -93,7 +93,7 @@ def send_heartbeat():
             httpx.get(f"{SERVER}/heartbeat/{mid}")
         except:
             print("device failed restarting")
-        time.sleep(15)
+        time.sleep(0.1)
     
 
 def render_job(loc, start_frame, length, subtask_id):
@@ -253,7 +253,7 @@ def main():
         job = get_job()
 
         if not job:
-            time.sleep(5)
+            time.sleep(0.1)
             continue
         url,job = job
         
