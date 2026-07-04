@@ -1,4 +1,4 @@
-# RenderForge 🔥
+# RenderForge
 
 A distributed Blender render farm that splits rendering jobs across multiple agents, dramatically reducing render times through parallelization.
 
