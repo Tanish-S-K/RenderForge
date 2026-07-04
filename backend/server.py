@@ -126,19 +126,102 @@ async def register_job(
     split_job(job_id, start_frame, end_frame, format)
 
     return {"message": "Job registered successfully", "job_id": job_id}
+        
+@app.post("/merge/{job_id}")
+def merge_job(job_id):
+    
+    try:
+        
+        output_path = "./mergespace/"
+        os.makedirs(output_path, exist_ok=True)
+        
+        result = sp.table("job").select("user_id, name").eq("job_id", job_id).execute()
 
+        
+        if not result.data:
+            return {"error": f"No job found for job_id={job_id}"}
+    
+        user_id = result.data[0]["user_id"]
+        name = result.data[0]["name"]
+        
+
+        files = sp.storage.from_("RFV2").list(f"users/{user_id}/subtasks/")
+
+        files.sort(key=lambda x: x['name'])
+    
+        file_paths = []
+        try:
+            os.makedirs(output_path, exist_ok=True)
+            
+            with open(output_path + "list.txt", "wb") as f:
+                for file in files:
+    
+                    path = f"users/{user_id}/subtasks/{file['name']}"
+                    print("path :", path)
+                    file_paths.append(path)
+    
+                    signed = sp.storage.from_("RFV2").create_signed_url(
+                        path,
+                        3600
+                    )
+    
+                    url = signed["signedURL"]
+                    f.write(f"file '{url}'\n".encode("utf-8"))
+        except Exception as e:
+            print("Downloading is not right")
+            return {"message": e}
+    
+        subprocess.run([
+            "./dependencies/ffmpeg",
+            "-protocol_whitelist", "file,http,https,tcp,tls,crypto",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", output_path + "list.txt",
+            "-c", "copy",
+            output_path + name + ".mp4"
+        ])
+
+        try:
+            sp.storage.from_("RFV2").remove(file_paths)
+        except Exception as e:
+            print("Cleanup failed:", e)
+            return {"message" : e}
+    
+        return {
+            "message": "Merge complete",
+            "output_file": f"{output_path}{name}.mp4"
+        }
+    except Exception as e:
+        print("Something else is wrong")
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": str(e),
+                "type": type(e).__name__
+            }
+        )
 
 @app.post("/job_complete/{job_id}")
 def job_complete(job_id):
-    try: cnt = sp.table("job").select("alive_cnt").eq("job_id", job_id).execute().data[0]["alive_cnt"]
-    except: return {"message": "the table alive_cnt access wrong"}
+    try: 
+        cnt = sp.table("job").select("alive_cnt").eq("job_id", job_id).execute().data[0]["alive_cnt"]
+    except: 
+        return {"message": "the table alive_cnt access wrong"}
+
     if (cnt == 0):
         try: 
-            response = httpx.post(f"{SERVER}/merge/{job_id}",timeout=None)
-        except: return {"message": "http merge requestn wrong"}
-        
-        try: output_file = response.json()["output_file"]
-        except: return {"message": response.json()}
+            response = merge_job(job_id)
+        except: 
+            return {"message": "http merge requestn wrong"}
+
+        data = response
+        output_file = data.get("output_file")
+        if not output_file:
+            return {
+                "error": "missing output_file",
+                "response": data
+            }
 
         try: content = open(output_file,"rb").read()
         except: return {"message": "output file reading"}
@@ -340,72 +423,6 @@ async def machine_register(data: Machine_Request):
         return {"machine_id": machine_id}
     except Exception as e:
         return {"message": e}
-    
-@app.post("/merge/{job_id}")
-def merge_job(job_id):
-    try:
-        output_path = "./mergespace/"
-        os.makedirs(output_path, exist_ok=True)
-        result = sp.table("job").select("user_id, name").eq("job_id", job_id).execute()
-        if not result.data:
-            return {"error": f"No job found for job_id={job_id}"}
-    
-        user_id = result.data[0]["user_id"]
-        name = result.data[0]["name"]
-    
-        files = sp.storage.from_("RFV2").list(f"users/{user_id}/subtasks/")
-        print(user_id)
-        files.sort(key=lambda x: x['name'])
-    
-        file_paths = []
-        try:
-            os.makedirs(output_path, exist_ok=True)
-            
-            with open(output_path + "list.txt", "wb") as f:
-                for file in files:
-    
-                    path = f"users/{user_id}/subtasks/{file['name']}"
-                    print("path :", path)
-                    file_paths.append(path)
-    
-                    signed = sp.storage.from_("RFV2").create_signed_url(
-                        path,
-                        3600
-                    )
-    
-                    url = signed["signedURL"]
-                    f.write(f"file '{url}'\n".encode("utf-8"))
-        except Exception as e:
-            return {"message": e}
-    
-        subprocess.run([
-            "./dependencies/ffmpeg",
-            "-protocol_whitelist", "file,http,https,tcp,tls,crypto",
-            "-f", "concat",
-            "-safe", "0",
-            "-i", output_path + "list.txt",
-            "-c", "copy",
-            output_path + name + ".mp4"
-        ])
-        try:
-            sp.storage.from_("RFV2").remove(file_paths)
-        except Exception as e:
-            print("Cleanup failed:", e)
-            return {"message" : e}
-    
-        return {
-            "message": "Merge complete",
-            "output_file": f"{output_path}{name}.mp4"
-        }
-    except Exception as e:
-        traceback.print_exc()   # prints full traceback in the server console
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "error": str(e),
-                "type": type(e).__name__
-            }
-        )
 
 @app.on_event("startup")
 def main():
