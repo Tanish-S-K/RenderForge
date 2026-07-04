@@ -127,80 +127,140 @@ async def register_job(
 
     return {"message": "Job registered successfully", "job_id": job_id}
         
+
+
 @app.post("/merge/{job_id}")
-def merge_job(job_id):
-    
-    try:
-        
-        output_path = "./mergespace/"
-        os.makedirs(output_path, exist_ok=True)
-        
-        result = sp.table("job").select("user_id, name").eq("job_id", job_id).execute()
+def merge_job(job_id: str):
 
-        
-        if not result.data:
-            return {"error": f"No job found for job_id={job_id}"}
-    
-        user_id = result.data[0]["user_id"]
-        name = result.data[0]["name"]
-        
+    output_path = "./mergespace/"
+    os.makedirs(output_path, exist_ok=True)
 
-        files = sp.storage.from_("RFV2").list(f"users/{user_id}/subtasks/")
-
-        files.sort(key=lambda x: x['name'])
-    
-        file_paths = []
-        try:
-            os.makedirs(output_path, exist_ok=True)
-            
-            with open(output_path + "list.txt", "wb") as f:
-                for file in files:
-    
-                    path = f"users/{user_id}/subtasks/{file['name']}"
-                    print("path :", path)
-                    file_paths.append(path)
-    
-                    signed = sp.storage.from_("RFV2").create_signed_url(
-                        path,
-                        3600
-                    )
-    
-                    url = signed["signedURL"]
-                    f.write(f"file '{url}'\n".encode("utf-8"))
-        except Exception as e:
-            print("Downloading is not right")
-            return {"message": e}
-    
-        subprocess.run([
-            "./dependencies/ffmpeg",
-            "-protocol_whitelist", "file,http,https,tcp,tls,crypto",
-            "-f", "concat",
-            "-safe", "0",
-            "-i", output_path + "list.txt",
-            "-c", "copy",
-            output_path + name + ".mp4"
-        ])
-
-        try:
-            sp.storage.from_("RFV2").remove(file_paths)
-        except Exception as e:
-            print("Cleanup failed:", e)
-            return {"message" : e}
-    
-        return {
-            "message": "Merge complete",
-            "output_file": f"{output_path}{name}.mp4"
-        }
-    except Exception as e:
-        print("Something else is wrong")
-        traceback.print_exc()
-        raise HTTPException(
+    def fail(step, e, extra=None):
+        return HTTPException(
             status_code=500,
             detail={
+                "success": False,
+                "step": step,
                 "error": str(e),
-                "type": type(e).__name__
+                "type": type(e).__name__,
+                "extra": extra,
+                "traceback": traceback.format_exc()
             }
         )
+
+    try:
+        # ----------------------------
+        # STEP 1: Fetch job metadata
+        # ----------------------------
+        try:
+            result = sp.table("job") \
+                .select("user_id, name") \
+                .eq("job_id", job_id) \
+                .execute()
+
+            if not result.data:
+                raise Exception("Job not found")
+
+            user_id = result.data[0]["user_id"]
+            name = result.data[0]["name"]
+
+        except Exception as e:
+            raise fail("fetch_job_metadata", e)
+
+        # ----------------------------
+        # STEP 2: List storage files
+        # ----------------------------
+        try:
+            files = sp.storage.from_("RFV2").list(
+                f"users/{user_id}/subtasks/"
+            )
+
+            if not isinstance(files, list):
+                raise Exception(f"Invalid storage response: {files}")
+
+            files.sort(key=lambda x: x.get("name", ""))
+
+        except Exception as e:
+            raise fail("list_storage_files", e, {"user_id": user_id})
+
+        # ----------------------------
+        # STEP 3: Create signed URLs + list.txt
+        # ----------------------------
+        file_paths = []
+        list_file_path = os.path.join(output_path, "list.txt")
+
+        try:
+            with open(list_file_path, "wb") as f:
+
+                for file in files:
+                    try:
+                        path = f"users/{user_id}/subtasks/{file['name']}"
+                        file_paths.append(path)
+
+                        signed = sp.storage.from_("RFV2").create_signed_url(
+                            path, 3600
+                        )
+
+                        if not signed or "signedURL" not in signed:
+                            raise Exception(f"Signed URL failed: {signed}")
+
+                        url = signed["signedURL"]
+
+                        f.write(f"file '{url}'\n".encode("utf-8"))
+
+                    except Exception as inner:
+                        raise fail("create_signed_url_loop", inner, {
+                            "file": file
+                        })
+
+        except Exception as e:
+            raise fail("build_concat_list", e)
+
+        # ----------------------------
+        # STEP 4: Run ffmpeg merge
+        # ----------------------------
+        try:
+            output_file = os.path.join(output_path, f"{name}.mp4")
+
+            process = subprocess.run([
+                "./dependencies/ffmpeg",
+                "-protocol_whitelist", "file,http,https,tcp,tls,crypto",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", list_file_path,
+                "-c", "copy",
+                output_file
+            ], capture_output=True, text=True)
+
+            if process.returncode != 0:
+                raise Exception(process.stderr)
+
+        except Exception as e:
+            raise fail("ffmpeg_merge", e)
+
+        # ----------------------------
+        # STEP 5: Cleanup storage
+        # ----------------------------
+        try:
+            sp.storage.from_("RFV2").remove(file_paths)
+
+        except Exception as e:
+            raise fail("cleanup_storage", e, {"file_paths": file_paths})
+
+        # ----------------------------
+        # SUCCESS
+        # ----------------------------
+        return {
+            "success": True,
+            "message": "Merge complete",
+            "output_file": output_file
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        raise fail("unknown_error", e)
 
 @app.post("/job_complete/{job_id}")
 def job_complete(job_id):
