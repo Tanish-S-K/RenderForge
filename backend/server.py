@@ -129,83 +129,49 @@ async def register_job(
 
 @app.post("/merge/{job_id}")
 def merge_job(job_id):
+
     output_path = "./mergespace/"
 
-    # Step 1: Fetch job
-    try:
-        result = sp.table("job").select("user_id, name").eq("job_id", job_id).execute()
+    result = sp.table("job").select("user_id, name").eq("job_id", job_id).execute()
+    return result
+    if not result.data:
+        return {"error": f"No job found for job_id={job_id}"}
 
-        if not result.data:
-            raise HTTPException(status_code=404, detail=f"No job found for job_id={job_id}")
+    user_id = result.data[0]["user_id"]
+    name = result.data[0]["name"]
 
-        user_id = result.data[0]["user_id"]
-        name = result.data[0]["name"]
+    files = sp.storage.from_("RFV2").list(f"users/{user_id}/subtasks/")
+    files.sort(key=lambda x: x['name'])
 
-    except Exception as e:
-        return {
-            "step": "fetch_job",
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }
+    file_paths = []
 
-    # Step 2: List files
-    try:
-        files = sp.storage.from_("RFV2").list(f"users/{user_id}/subtasks/")
-        files.sort(key=lambda x: x["name"])
-    except Exception as e:
-        return {
-            "step": "list_files",
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }
+    with open(output_path + "list.txt", "wb") as f:
+        for file in files:
 
-    # Step 3: Create list.txt
-    try:
-        file_paths = []
+            path = f"users/{user_id}/subtasks/{file['name']}"
+            file_paths.append(path)
 
-        with open(output_path + "list.txt", "wb") as f:
-            for file in files:
-                path = f"users/{user_id}/subtasks/{file['name']}"
-                file_paths.append(path)
+            signed = sp.storage.from_("RFV2").create_signed_url(
+                path,
+                3600
+            )
 
-                signed = sp.storage.from_("RFV2").create_signed_url(path, 3600)
-                url = signed["signedURL"]
+            url = signed["signedURL"]
+            f.write(f"file '{url}'\n".encode("utf-8"))
 
-                f.write(f"file '{url}'\n".encode("utf-8"))
-    except Exception as e:
-        return {
-            "step": "create_list",
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }
-
-    # Step 4: Run ffmpeg
-    try:
-        subprocess.run([
-            "./dependencies/ffmpeg.exe",
-            "-protocol_whitelist", "file,http,https,tcp,tls,crypto",
-            "-f", "concat",
-            "-safe", "0",
-            "-i", output_path + "list.txt",
-            "-c", "copy",
-            output_path + name + ".mp4"
-        ], check=True)
-    except Exception as e:
-        return {
-            "step": "ffmpeg",
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }
-
-    # Step 5: Cleanup
+    subprocess.run([
+        "ffmpeg",
+        "-protocol_whitelist", "file,http,https,tcp,tls,crypto",
+        "-f", "concat",
+        "-safe", "0",
+        "-i", output_path + "list.txt",
+        "-c", "copy",
+        output_path + name + ".mp4"
+    ])
     try:
         sp.storage.from_("RFV2").remove(file_paths)
     except Exception as e:
-        return {
-            "step": "cleanup",
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }
+        print("Cleanup failed:", e)
 
     return {
         "message": "Merge complete",
