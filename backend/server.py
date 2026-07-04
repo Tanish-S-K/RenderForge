@@ -135,6 +135,7 @@ def merge_job(job_id):
     output_path = "./mergespace/"
 
     result = sp.table("job").select("user_id, name").eq("job_id", job_id).execute()
+    return result
     if not result.data:
         return {"error": f"No job found for job_id={job_id}"}
 
