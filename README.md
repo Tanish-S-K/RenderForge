@@ -4,6 +4,10 @@ A distributed Blender render farm that splits rendering jobs across multiple age
 
 🔗 **[Live Demo](https://render-forge.vercel.app/)** • Open Source
 
+## 🎥 Project Demo
+
+▶️ **[Watch the 5-minute RenderForge Demo](https://drive.google.com/file/d/1Of5pRFm-1sRcOLVSlpiDVIs5TzgagQuQ/view?usp=sharing)**
+
 ---
 
 ## What is RenderForge?
